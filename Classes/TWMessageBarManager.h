@@ -14,8 +14,11 @@
 typedef enum {
     TWMessageBarMessageTypeError,
     TWMessageBarMessageTypeSuccess,
-    TWMessageBarMessageTypeInfo
+    TWMessageBarMessageTypeInfo,
+    TWMessageBarMessageTypeTapstream
 } TWMessageBarMessageType;
+
+extern NSString * const kTWMessageViewLoginButtonTouchedNotification;
 
 @protocol TWMessageBarStyleSheet <NSObject>
 

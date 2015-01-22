@@ -18,6 +18,7 @@ CGFloat const kTWMessageViewBarPadding = 10.0f;
 CGFloat const kTWMessageViewIconSize = 36.0f;
 CGFloat const kTWMessageViewTextOffset = 2.0f;
 NSUInteger const kTWMessageViewiOS7Identifier = 7;
+CGFloat const kTWMessageViewLoginSetupValue = 20.0f;
 
 // Numerics (TWMessageBarManager)
 CGFloat const kTWMessageBarManagerDisplayDelay = 3.0f;
@@ -45,6 +46,10 @@ static UIColor *kTWDefaultMessageBarStyleSheetInfoBackgroundColor = nil;
 static UIColor *kTWDefaultMessageBarStyleSheetErrorStrokeColor = nil;
 static UIColor *kTWDefaultMessageBarStyleSheetSuccessStrokeColor = nil;
 static UIColor *kTWDefaultMessageBarStyleSheetInfoStrokeColor = nil;
+static UIColor *kTWDefaultMessageBarStyleSheetTapstreamLoginStrokeColor = nil;
+
+// Notifications
+NSString * const kTWMessageViewLoginButtonTouchedNotification = @"kTWMessageViewLoginButtonTouchedNotification";
 
 @protocol TWMessageViewDelegate;
 
@@ -52,6 +57,7 @@ static UIColor *kTWDefaultMessageBarStyleSheetInfoStrokeColor = nil;
 
 @property (nonatomic, copy) NSString *titleString;
 @property (nonatomic, copy) NSString *descriptionString;
+@property (nonatomic, strong) UIButton *loginButton;
 
 @property (nonatomic, assign) TWMessageBarMessageType messageType;
 
@@ -274,7 +280,6 @@ static UIColor *kTWDefaultMessageBarStyleSheetInfoStrokeColor = nil;
     self.messageVisible = NO;
     [self.messageBarQueue removeAllObjects];
     [NSObject cancelPreviousPerformRequestsWithTarget:self];
-    self.messageWindow = nil;
 }
 
 - (void)hideAll
@@ -292,7 +297,8 @@ static UIColor *kTWDefaultMessageBarStyleSheetInfoStrokeColor = nil;
         
         TWMessageView *messageView = [self.messageBarQueue objectAtIndex:0];
         [self messageBarViewController].statusBarHidden = messageView.statusBarHidden; // important to do this prior to hiding
-        messageView.frame = CGRectMake(0, -[messageView height], [messageView width], [messageView height]);
+        
+        messageView.frame = CGRectMake(0, -[messageView height] , [messageView width], [messageView height]);
         messageView.hidden = NO;
         [messageView setNeedsDisplay];
         
@@ -308,6 +314,7 @@ static UIColor *kTWDefaultMessageBarStyleSheetInfoStrokeColor = nil;
             [UIView animateWithDuration:kTWMessageBarManagerDismissAnimationDuration animations:^{
                 [messageView setFrame:CGRectMake(messageView.frame.origin.x, messageView.frame.origin.y + [messageView height], [messageView width], [messageView height])]; // slide down
             }];
+            
             [self performSelector:@selector(itemSelected:) withObject:messageView afterDelay:messageView.duration];
             
             [self generateAccessibleElementWithTitle:messageView.titleString description:messageView.descriptionString];
@@ -481,8 +488,34 @@ static UIColor *kTWDefaultMessageBarStyleSheetInfoStrokeColor = nil;
         _hit = NO;
         
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(didChangeDeviceOrientation:) name:UIDeviceOrientationDidChangeNotification object:nil];
+        
     }
+    
     return self;
+}
+
+
+- (void)setupLoginButtonWithUserName:(NSString *)name
+{
+    if (self.messageType != TWMessageBarMessageTypeTapstream) {
+        return;
+    }
+    
+    NSString *buttonTitle = [NSString stringWithFormat:@"Not %@?  ", name];
+    _loginButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    [_loginButton setTitle:buttonTitle forState:UIControlStateNormal];
+    [_loginButton addTarget:self action:@selector(loginButtonTouched:) forControlEvents:UIControlEventTouchUpInside];
+    [_loginButton.titleLabel setFont:[UIFont systemFontOfSize:14.0f]];
+    _loginButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentRight;
+    _loginButton.frame = CGRectMake(self.bounds.size.width/3 - kTWMessageViewLoginSetupValue/2, self.bounds.size.height - (kTWMessageViewLoginSetupValue*3), self.bounds.size.width/2 + ((self.bounds.size.width/3)/2), kTWMessageViewLoginSetupValue*3);
+
+    [self addSubview:_loginButton];
+    [self bringSubviewToFront:_loginButton];
+}
+
+- (void)loginButtonTouched:(id)sender
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:kTWMessageViewLoginButtonTouchedNotification object:self];
 }
 
 #pragma mark - Memory Management
@@ -588,6 +621,8 @@ static UIColor *kTWDefaultMessageBarStyleSheetInfoStrokeColor = nil;
 #pragma clang diagnostic pop
         }
     }
+    
+    [self setupLoginButtonWithUserName:self.descriptionString];
 }
 
 #pragma mark - Getters
@@ -596,7 +631,13 @@ static UIColor *kTWDefaultMessageBarStyleSheetInfoStrokeColor = nil;
 {
     CGSize titleLabelSize = [self titleSize];
     CGSize descriptionLabelSize = [self descriptionSize];
-    return MAX((kTWMessageViewBarPadding * 2) + titleLabelSize.height + descriptionLabelSize.height + [self statusBarOffset], (kTWMessageViewBarPadding * 2) + kTWMessageViewIconSize + [self statusBarOffset]);
+    
+    CGFloat extraHeight = 0;
+    if (self.messageType == TWMessageBarMessageTypeTapstream) {
+        extraHeight = 40;
+    }
+    
+    return MAX((kTWMessageViewBarPadding * 2) + titleLabelSize.height + descriptionLabelSize.height + [self statusBarOffset], (kTWMessageViewBarPadding * 2) + kTWMessageViewIconSize + [self statusBarOffset] + extraHeight);
 }
 
 - (CGFloat)width
@@ -782,6 +823,9 @@ static UIColor *kTWDefaultMessageBarStyleSheetInfoStrokeColor = nil;
             break;
         case TWMessageBarMessageTypeInfo:
             backgroundColor = kTWDefaultMessageBarStyleSheetInfoBackgroundColor;
+            break;
+        case TWMessageBarMessageTypeTapstream:
+            backgroundColor = kTWDefaultMessageBarStyleSheetTapstreamLoginStrokeColor;
             break;
         default:
             break;
